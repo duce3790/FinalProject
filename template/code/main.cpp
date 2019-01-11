@@ -8,6 +8,9 @@
 #include <allegro5/allegro_ttf.h>
 
 #define GAME_TERMINATE -1
+#define MAX_ENEMY 3
+#define MAX_BULLET 4
+
 
 // ALLEGRO Variables
 ALLEGRO_DISPLAY* display = NULL;
@@ -26,19 +29,32 @@ ALLEGRO_FONT *font = NULL;
 //Custom Definition
 const char *title = "Final Project 10xxxxxxx";
 const float FPS = 60;
-const int WIDTH = 400;
-const int HEIGHT = 600;
+const int WIDTH = 600;
+const int HEIGHT = 400;
+const float MAX_COOLDOWN = 0.2;
+double last_shoot_timestamp;
 typedef struct character
 {
-    int x;
-    int y;
+    // The center coordinate of the image.
+    float x, y;
+    // The width and height of the object.
+    float w, h;
+    // The velocity in x, y axes.
+    float vx, vy;
+    // Should we draw this object on the screen.
+    bool hidden;
     ALLEGRO_BITMAP *image_path;
 
 }Character;
 
-Character character1;
-Character character2;
-Character character3;
+Character plane;
+Character enemies[MAX_ENEMY];
+Character bullets[MAX_BULLET];
+
+
+Character character1;   //plane
+Character character2;   //enemy
+Character character3;   //enemy
 
 int imageWidth = 0;
 int imageHeight = 0;
@@ -56,6 +72,7 @@ void game_begin();
 int process_event();
 int game_run();
 void game_destroy();
+ALLEGRO_BITMAP *load_bitmap_at_size(const char *filename, int w, int h);
 
 int main(int argc, char *argv[]) {
     int msg = 0;
@@ -115,6 +132,7 @@ void game_init() {
     // Register event
     al_register_event_source(event_queue, al_get_display_event_source(display));
     al_register_event_source(event_queue, al_get_keyboard_event_source());
+    //al_register_event_source(event_queue, al_get_mouse_event_source());
 }
 
 void game_begin() {
@@ -126,11 +144,12 @@ void game_begin() {
     }
     // Loop the song until the display closes
     al_play_sample(song, 1.0, 0.0,1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
-    al_clear_to_color(al_map_rgb(100,100,100));
+    //al_clear_to_color(al_map_rgb(100,100,100));
     // Load and draw text
     font = al_load_ttf_font("pirulen.ttf",12,0);
-    al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+220 , ALLEGRO_ALIGN_CENTRE, "Press 'Enter' to start");
-    al_draw_rectangle(WIDTH/2-150, 510, WIDTH/2+150, 550, al_map_rgb(255, 255, 255), 0);
+    //al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+220 , ALLEGRO_ALIGN_CENTRE, "Press 'Enter' to start");
+    //al_draw_rectangle(WIDTH/2-150, 510, WIDTH/2+150, 550, al_map_rgb(255, 255, 255), 0);
+    al_draw_bitmap(load_bitmap_at_size("menu.jpg",WIDTH,HEIGHT),0,0,0);
     al_flip_display();
 }
 
@@ -144,8 +163,14 @@ int process_event(){
         if(character2.x < -150) dir = false;
         else if(character2.x > WIDTH+50) dir = true;
 
-        if(dir) character2.x -= 10;
-        else character2.x += 10;
+        if(dir) character2.x -= 5;
+        else character2.x += 5;
+
+        int i;
+        for(i=0;i<MAX_BULLET;++i){
+            if(bullets[i].x > WIDTH+50) bullets[i].hidden = true;
+            if(!bullets[i].hidden)  bullets[i].x += 5;
+        }
     }
     if(event.timer.source == timer2){
         ture = false;
@@ -157,7 +182,7 @@ int process_event(){
     }
 
     // Keyboard
-    if(event.type == ALLEGRO_EVENT_KEY_UP)
+    if(event.type == ALLEGRO_EVENT_KEY_DOWN)
     {
         switch(event.keyboard.keycode)
         {
@@ -179,6 +204,10 @@ int process_event(){
             case ALLEGRO_KEY_ENTER:
                 judge_next_window = true;
                 break;
+        }
+        if(event.mouse.type){
+            int i;
+            for(i=0;i<MAX_BULLET;++i)   bullets[i].hidden = false;
         }
     }
 
@@ -202,10 +231,16 @@ int game_run() {
                 character1.y = HEIGHT / 2 + 150;
                 character2.x = WIDTH + 100;
                 character2.y = HEIGHT / 2 - 280;
-                character1.image_path = al_load_bitmap("tower.png");
+                int i;
+                for(i=0;i<MAX_BULLET;++i){
+                    bullets[i].x = character1.x - 5 * i;
+                    bullets[i].y = character1.y;
+                }
+                character1.image_path = al_load_bitmap("plane.png");
                 character2.image_path = al_load_bitmap("teemo_left.png");
                 character3.image_path = al_load_bitmap("teemo_right.png");
-                background = al_load_bitmap("stage.jpg");
+                //bullets.image_path = al_load_bitmap("bullet.png");
+                background = al_load_bitmap("background.jpg");
 
                 //Initialize Timer
                 timer  = al_create_timer(1.0/15.0);
@@ -223,9 +258,11 @@ int game_run() {
     // Second window(Main Game)
     else if(window == 2){
         // Change Image for animation
-        al_draw_bitmap(background, 0,0, 0);
-        if(ture) al_draw_bitmap(character1.image_path, character1.x, character1.y, 0);
-
+        al_draw_bitmap(load_bitmap_at_size("background.jpg",WIDTH,HEIGHT), 0,0, 0);
+        int i;
+        //for(i=0;i<MAX_BULLET;++i)
+        //    al_draw_bitmap(load_bitmap_at_size("bullet.png",20,20), bullets[i].x, bullets[i].y, 0);
+        if(ture) al_draw_bitmap(load_bitmap_at_size("plane.png",50,50), character1.x, character1.y, 0);
         if(dir) al_draw_bitmap(character2.image_path, character2.x, character2.y, 0);
         else al_draw_bitmap(character3.image_path, character2.x, character2.y, 0);
 
@@ -248,4 +285,40 @@ void game_destroy() {
     al_destroy_timer(timer2);
     al_destroy_bitmap(image);
     al_destroy_sample(song);
+}
+
+ALLEGRO_BITMAP *load_bitmap_at_size(const char *filename, int w, int h){
+  ALLEGRO_BITMAP *resized_bmp, *loaded_bmp, *prev_target;
+
+  // 1. create a temporary bitmap of size we want
+  resized_bmp = al_create_bitmap(w, h);
+  if (!resized_bmp) return NULL;
+
+  // 2. load the bitmap at the original size
+  loaded_bmp = al_load_bitmap(filename);
+  if (!loaded_bmp)
+  {
+     al_destroy_bitmap(resized_bmp);
+     return NULL;
+  }
+
+  // 3. set the target bitmap to the resized bmp
+  prev_target = al_get_target_bitmap();
+  al_set_target_bitmap(resized_bmp);
+
+  // 4. copy the loaded bitmap to the resized bmp
+  al_draw_scaled_bitmap(loaded_bmp,
+     0, 0,                                // source origin
+     al_get_bitmap_width(loaded_bmp),     // source width
+     al_get_bitmap_height(loaded_bmp),    // source height
+     0, 0,                                // target origin
+     w, h,                                // target dimensions
+     0                                    // flags
+  );
+
+  // 5. restore the previous target and clean up
+  al_set_target_bitmap(prev_target);
+  al_destroy_bitmap(loaded_bmp);
+
+  return resized_bmp;
 }
