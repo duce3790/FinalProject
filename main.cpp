@@ -9,8 +9,8 @@
 
 #define GAME_TERMINATE -1
 #define PLAY_AGAIN 69
-#define MAX_BULLET 300
-#define MAX_BULLET_ENEMY 300
+#define MAX_BULLET 14
+#define MAX_BULLET_ENEMY 20
 #define UP 0
 #define DOWN 1
 #define LEFT 2
@@ -42,8 +42,8 @@ const char *title = "Final Project 107060007";
 const float FPS = 60;
 const int WIDTH = 1750;//disp_data.width
 const int HEIGHT = 800;
-float MAX_COOLDOWN = 0.05;
-float enemy_MAX_COOLDOWN = 0.5;
+float MAX_COOLDOWN = 0.1;
+float enemy_MAX_COOLDOWN = 0.6;
 double last_shoot_timestamp;
 double enemy_shoot_timestamp;
 //draw player blood
@@ -61,7 +61,6 @@ float blood_top_temp;
 //set injury
 float injury = 0.0;
 float enemy_injury = 0.0;
-
 typedef struct character
 {
     int h;
@@ -93,9 +92,11 @@ bool *mouse_state;
 int injury_time = 0;
 bool is_injury = true;
 bool store = false;
+bool is_death_anime = false;  // 偵測是否跑過死亡動畫
 //following code is to define the item we buy from shop
 int bullet_addtional_v = 0;  // let players bullet faster
 int enemy_addtional_v = 0;   // let enemy slower
+bool buy_add_bullet = true;
 
 void show_err_msg(int msg);
 void game_init();
@@ -103,6 +104,7 @@ void game_begin();
 int process_event();
 int game_run();
 void game_destroy();
+void death_animation(Character);
 
 int main(int argc, char *argv[]) {
     int msg = 0;
@@ -198,169 +200,191 @@ int process_event(){
     ALLEGRO_EVENT event;
     al_wait_for_event(event_queue, &event);
 
-    // Our setting for controlling animation
-    if(event.timer.source == timer){
-        if(character2.y < 0)
-            dir = false;
-        else if(character2.y > HEIGHT - character2.h)
-            dir = true;
+    if(!store){
+        // Our setting for controlling animation
+        if(event.timer.source == timer){
+            if(character2.y < 0)
+                dir = false;
+            else if(character2.y > HEIGHT - character2.h)
+                dir = true;
 
-        character2.vy = abs(rand()%10 + enemy_addtional_v);
+            character2.vy = abs(rand()%10 + enemy_addtional_v);
 
-        if(dir) character2.y -= character2.vy ;
-        else character2.y += character2.vy;
-        character3.x = character2.x;
-        character3.y = character2.y;
-    }
-    if(event.timer.source == timer2){
-        ture = false;
-        next = true;
-    }
-    if(event.timer.source == timer3){
-        if(next) next = false;
-        else ture = true;
-    }
-    // Keyboard
-    //
-    if(event.type == ALLEGRO_EVENT_KEY_DOWN) {
-        switch(event.keyboard.keycode) {
-            case ALLEGRO_KEY_UP:
-                keys[UP] = true;
-                break;
-            case ALLEGRO_KEY_DOWN:
-                keys[DOWN] = true;
-                break;
-            case ALLEGRO_KEY_RIGHT:
-                keys[RIGHT] = true;
-                break;
-            case ALLEGRO_KEY_LEFT:
-                keys[LEFT] = true;
-                break;
-            case ALLEGRO_KEY_SPACE:
-                keys[SPACE] = true;
-                break;
-            case ALLEGRO_KEY_B:
-                store = true;
+            if(dir) character2.y -= character2.vy ;
+            else character2.y += character2.vy;
+            character3.x = character2.x;
+            character3.y = character2.y;
         }
-    }
-    else if(event.type == ALLEGRO_EVENT_KEY_UP) {
-        switch(event.keyboard.keycode) {
-            case ALLEGRO_KEY_UP:
-                keys[UP] = false;
-                break;
-            case ALLEGRO_KEY_DOWN:
-                keys[DOWN] = false;
-                break;
-            case ALLEGRO_KEY_RIGHT:
-                keys[RIGHT] = false;
-                break;
-            case ALLEGRO_KEY_LEFT:
-                keys[LEFT] = false;
-                break;
-            case ALLEGRO_KEY_SPACE:
-                keys[SPACE] = false;
-                break;
-            case ALLEGRO_KEY_ESCAPE:
-                return GAME_TERMINATE;
-                break;
-            // For Start
-            case ALLEGRO_KEY_ENTER:
-                judge_next_window = true;
-                break;
+        if(event.timer.source == timer2){
+            ture = false;
+            next = true;
         }
-    }
+        if(event.timer.source == timer3){
+            if(next) next = false;
+            else ture = true;
+        }
+        // Keyboard
+        //
+        if(event.type == ALLEGRO_EVENT_KEY_DOWN) {
+            switch(event.keyboard.keycode) {
+                case ALLEGRO_KEY_UP:
+                    keys[UP] = true;
+                    break;
+                case ALLEGRO_KEY_DOWN:
+                    keys[DOWN] = true;
+                    break;
+                case ALLEGRO_KEY_RIGHT:
+                    keys[RIGHT] = true;
+                    break;
+                case ALLEGRO_KEY_LEFT:
+                    keys[LEFT] = true;
+                    break;
+                case ALLEGRO_KEY_SPACE:
+                    keys[SPACE] = true;
+                    break;
+                case ALLEGRO_KEY_B:
+                    store = true;
+            }
+        }
+        else if(event.type == ALLEGRO_EVENT_KEY_UP) {
+            switch(event.keyboard.keycode) {
+                case ALLEGRO_KEY_UP:
+                    keys[UP] = false;
+                    break;
+                case ALLEGRO_KEY_DOWN:
+                    keys[DOWN] = false;
+                    break;
+                case ALLEGRO_KEY_RIGHT:
+                    keys[RIGHT] = false;
+                    break;
+                case ALLEGRO_KEY_LEFT:
+                    keys[LEFT] = false;
+                    break;
+                case ALLEGRO_KEY_SPACE:
+                    keys[SPACE] = false;
+                    break;
+                case ALLEGRO_KEY_ESCAPE:
+                    return GAME_TERMINATE;
+                    break;
+                // For Start
+                case ALLEGRO_KEY_ENTER:
+                    judge_next_window = true;
+                    break;
+            }
+        }
 
-    character1.y -= keys[UP] * 30;
-    character1.y += keys[DOWN] * 30;
-    character1.x -= keys[LEFT] * 30;
-    character1.x += keys[RIGHT] * 30;
+        character1.y -= keys[UP] * character1.vy;
+        character1.y += keys[DOWN] * character1.vy;
+        character1.x -= keys[LEFT] * character1.vx;
+        character1.x += keys[RIGHT] * character1.vx;
 
-    // TODO: Limit the plane's collision box inside the frame.
-    if (character1.x - character1.w / 2 < 0)
-        character1.x = character1.w / 2;
-    else if (character1.x + character1.w / 2 > WIDTH)
-        character1.x = WIDTH - character1.w / 2;
-    if (character1.y - character1.h / 2 < 0)
-        character1.y = character1.h / 2;
-    else if (character1.y + character1.h / 2 > HEIGHT)
-        character1.y = HEIGHT - character1.h / 2;
+        // TODO: Limit the plane's collision box inside the frame.
+        if (character1.x + character1.w / 2 < 0)
+            character1.x = 0;
+        else if (character1.x - character1.w / 2 > WIDTH)
+            character1.x = WIDTH - character1.w / 2;
+        if (character1.y +  character2.h / 2 < 0)
+            character1.y = 0;
+        else if (character1.y + character1.h / 2 > HEIGHT)
+            character1.y = HEIGHT - character1.h / 2;
 
-    // TODO: Update bullet coordinates.
-    int i;
-    for (i = 0; i < MAX_BULLET; i++) {
-        if (bullets[i].hidden)
-            continue;
-        bullets[i].x += bullets[i].vx;
-        bullets[i].y += bullets[i].vy;
-        if (bullets[i].x + bullets[i].w > WIDTH )
-            bullets[i].hidden = true;
-    }
-
-    for (i = 0; i < MAX_BULLET_ENEMY; i++) {
-        if (enemy_bullets[i].hidden)
-            continue;
-        enemy_bullets[i].x += enemy_bullets[i].vx;
-        enemy_bullets[i].y += enemy_bullets[i].vy;
-        if (enemy_bullets[i].x < 0)
-            enemy_bullets[i].hidden = true;
-    }
-
-    // TODO: Shoot if key is down and cool-down is over.
-    double now = al_get_time();
-    if (keys[SPACE] && (now - last_shoot_timestamp) >= MAX_COOLDOWN) {
-        for (i = 0; i < MAX_BULLET; i++) {
+        // TODO: Update bullet coordinates.
+        int i;
+        for (i = 0; i < MAX_BULLET; i += 2) {
             if (bullets[i].hidden)
-                break;
+                continue;
+            bullets[i].x += bullets[i].vx;
+            bullets[i].y += bullets[i].vy;
+            if(buy_add_bullet){
+                bullets[i+1].x += bullets[i].vx;
+                bullets[i+1].y += bullets[i].vy;
+            }
+            if (bullets[i].x + bullets[i].w > WIDTH ){
+                bullets[i].hidden = true;
+                bullets[i+1].hidden = true;
+            }
         }
-        if (i != MAX_BULLET){
-            last_shoot_timestamp = now;
-            bullets[i].hidden = false;
-            bullets[i].x = character1.x + character1.w;
-            bullets[i].y = character1.y + character1.h / 2;
-        }
-    }
 
-    now = al_get_time();
-    if(now - enemy_shoot_timestamp >= enemy_MAX_COOLDOWN){
-        for (i = 0; i < MAX_BULLET_ENEMY; i++) {
+        for (i = 0; i < MAX_BULLET_ENEMY; i += 2) {
             if (enemy_bullets[i].hidden)
+                continue;
+            enemy_bullets[i].x += enemy_bullets[i].vx;
+            enemy_bullets[i].y += enemy_bullets[i].vy;
+            enemy_bullets[i+1].x += enemy_bullets[i+1].vx;
+            enemy_bullets[i+1].y += enemy_bullets[i+1].vy;
+            if (enemy_bullets[i].x < 0){
+                enemy_bullets[i].hidden = true;
+                enemy_bullets[i+1].hidden = true;
+            }
+        }
+
+        // TODO: Shoot if key is down and cool-down is over.
+        double now = al_get_time();
+        if (keys[SPACE] && (now - last_shoot_timestamp) >= MAX_COOLDOWN) {
+            for (i = 0; i < MAX_BULLET; i +=2) {
+                if (bullets[i].hidden)
+                    break;
+            }
+            if (i != MAX_BULLET){
+                last_shoot_timestamp = now;
+                bullets[i].hidden = false;
+                bullets[i].x = character1.x + character1.w;
+                bullets[i].y = character1.y + character1.h  / 3;
+                if(buy_add_bullet){
+                    bullets[i+1].hidden = false;
+                    bullets[i+1].x = character1.x + character1.w;
+                    bullets[i+1].y = character1.y + character1.h * 2 / 3;
+                }
+
+            }
+        }
+
+        now = al_get_time();
+        if(now - enemy_shoot_timestamp >= enemy_MAX_COOLDOWN){
+            for (i = 0; i < MAX_BULLET_ENEMY; i += 2) {
+                if (enemy_bullets[i].hidden)
+                    break;
+            }
+            if (i != MAX_BULLET_ENEMY){
+                enemy_shoot_timestamp = now;
+                enemy_bullets[i].hidden = false;
+                enemy_bullets[i+1].hidden = false;
+                if(dir){
+                    enemy_bullets[i].x = character2.x;
+                    enemy_bullets[i].y = character2.y - character2.h / 3;
+                    enemy_bullets[i+1].x = character2.x;
+                    enemy_bullets[i+1].y = character2.y - character2.h * 2 / 3;
+                }
+                else{
+                    enemy_bullets[i].x = character3.x;
+                    enemy_bullets[i].y = character3.y - character3.h / 2;
+                    enemy_bullets[i+1].x = character2.x;
+                    enemy_bullets[i+1].y = character2.y - character2.h * 2 / 3;
+
+                }
+            }
+        }
+
+        //plane injury
+        for( i = 0; i < MAX_BULLET_ENEMY; ++i){
+            if((enemy_bullets[i].x > character1.x) && (enemy_bullets[i].x < character1.x + character1.w)
+               &&(enemy_bullets[i].y > character1.y) && (enemy_bullets[i].y < character1.y + character1.h)){
+                injury = 1.0;
+                enemy_bullets[i].hidden = true;
                 break;
-        }
-        if (i != MAX_BULLET_ENEMY){
-            enemy_shoot_timestamp = now;
-            enemy_bullets[i].hidden = false;
-            if(dir){
-                enemy_bullets[i].x = character2.x;
-                enemy_bullets[i].y = character2.y - character2.h / 2;
             }
-            else{
-                enemy_bullets[i].x = character3.x;
-                enemy_bullets[i].y = character3.y - character3.h / 2;
+        }
 
+        // enemy injury
+        for( i = 0; i < MAX_BULLET; ++i){
+            if((bullets[i].x > character2.x) && (bullets[i].x < character2.x + character2.w)
+               &&(bullets[i].y > character2.y) && (bullets[i].y < character2.y + character2.h)){
+                enemy_injury = 1.0;
+                bullets[i].hidden = true;
+                break;
             }
         }
     }
-
-    //plane injury
-    for( i = 0; i < MAX_BULLET_ENEMY; ++i){
-        if((enemy_bullets[i].x > character1.x) && (enemy_bullets[i].x < character1.x + character1.w)
-           &&(enemy_bullets[i].y > character1.y) && (enemy_bullets[i].y < character1.y + character1.h)){
-            injury = 1.0;
-            enemy_bullets[i].hidden = true;
-            break;
-        }
-    }
-
-    // enemy injury
-    for( i = 0; i < MAX_BULLET; ++i){
-        if((bullets[i].x > character2.x) && (bullets[i].x < character2.x + character2.w)
-           &&(bullets[i].y > character2.y) && (bullets[i].y < character2.y + character2.h)){
-            enemy_injury = 1.0;
-            bullets[i].hidden = true;
-            break;
-        }
-    }
-
 
     // Shutdown our program
     if(event.type == ALLEGRO_EVENT_DISPLAY_CLOSE)
@@ -369,10 +393,9 @@ int process_event(){
     return 0;
 }
 
-int game_run() {
+int game_run(){
     int error = 0;
     // First window(Menu)
-    int i;
     if(window == 1){
         if (!al_is_event_queue_empty(event_queue)) {
             error = process_event();
@@ -383,6 +406,8 @@ int game_run() {
                 character1.h = 150;
                 character1.x = WIDTH / 2;
                 character1.y = HEIGHT / 2 + 150;
+                character1.vx = (character1.w / 6);
+                character1.vy = (character1.h / 6);
                 character2.w = 100;
                 character2.h = 100;
                 //character2.x = WIDTH + 100;
@@ -394,13 +419,13 @@ int game_run() {
                 character1.image_path = load_bitmap_at_size("pegasus.png",character1.w,character1.h);
                 character2.image_path = load_bitmap_at_size("teemo_left.png",character2.w,character2.h);
                 character3.image_path = load_bitmap_at_size("teemo_right.png",character2.w,character2.h);
-                background = load_bitmap_at_size("background.jpg",WIDTH,HEIGHT);
+                background = load_bitmap_at_size("background_2.jpg",WIDTH,HEIGHT);
                 int i;
                 for (i = 0; i < MAX_BULLET; i++) {
                     bullets[i].w = 60;
                     bullets[i].h = 30;
-                    bullets[i].image_path = load_bitmap_at_size("bullet.jpg",bullets[i].w,bullets[i].h);
-                    bullets[i].vx = 16 + bullet_addtional_v;
+                    bullets[i].image_path = load_bitmap_at_size("bullet.png",bullets[i].w,bullets[i].h);
+                    bullets[i].vx = 20 + bullet_addtional_v;
                     bullets[i].vy = 0;
                     bullets[i].hidden = true;
                 }
@@ -409,7 +434,7 @@ int game_run() {
                     enemy_bullets[i].w = 30;
                     enemy_bullets[i].h = 30;
                     enemy_bullets[i].image_path = load_bitmap_at_size("bulletbt.png",bullets[i].w,bullets[i].h);
-                    enemy_bullets[i].vx = -5;
+                    enemy_bullets[i].vx = -20;
                     enemy_bullets[i].vy = 0;
                     enemy_bullets[i].hidden = true;
                 }
@@ -432,8 +457,7 @@ int game_run() {
             }
         }
     }
-    // Second window(Main Game)
-    else if(window == 2 && !store){
+    else if(window == 2 && !store){   // Second window(Main Game)
         // Change Image for animation
         al_draw_bitmap(background, 0,0, 0);
         int i;
@@ -447,7 +471,9 @@ int game_run() {
             blood_down_temp -= injury;
         }
         else{
-            window = 3;   // you lose
+            window = 3; // you lose
+            is_death_anime = true;  // run death animation
+            //al_rest(2.0);
         }
         injury = 0.0;
         //enermy
@@ -455,11 +481,12 @@ int game_run() {
             al_draw_rectangle(blood_top_x + blood_between_distance -0.5, blood_top_y-0.5, enemy_blood_down_x + 1, blood_down_y+1, al_map_rgb(255, 255, 255), 1.0);
             al_draw_filled_rectangle(blood_top_temp ,blood_top_y ,enemy_blood_down_x ,blood_down_y,al_map_rgb(255, 0, 0));
             blood_top_temp += enemy_injury;
+
         }
         else{
             window = 4;  // you win
         }
-
+        enemy_injury = 0.0;
 
         for (i = 0; i < MAX_BULLET; i++){
             if(!bullets[i].hidden)
@@ -482,18 +509,21 @@ int game_run() {
         }
     }
     else if(window == 3){   // lose case
-        al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+220 , ALLEGRO_ALIGN_CENTRE, "Press TAB to RESATRT");
-        al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+190 , ALLEGRO_ALIGN_CENTRE, "Press E to END");
+        al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2-50 , ALLEGRO_ALIGN_CENTRE, "You Win!!");
+        al_flip_display();
+        if( is_death_anime )  death_animation(character1);
         ALLEGRO_EVENT event_r_e;
         al_wait_for_event(event_queue, &event_r_e);
         if(event_r_e.type == ALLEGRO_EVENT_KEY_DOWN){
             switch(event_r_e.keyboard.keycode){
                 case ALLEGRO_KEY_TAB:
+                    printf("restart\n");
                     blood_down_temp = blood_down_x;
                     window = 1;
                     return PLAY_AGAIN;
                     break;
                 case ALLEGRO_KEY_B:
+                    blood_down_temp = blood_down_x;
                     store = true;
                     break;
                 case ALLEGRO_KEY_E:
@@ -502,43 +532,40 @@ int game_run() {
                 case ALLEGRO_KEY_ESCAPE:
                     return GAME_TERMINATE;
                     break;
+                /*
                 default:
                     al_flip_display();
                     al_rest(5.0);
                     al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+180 , ALLEGRO_ALIGN_CENTRE, "fuck you !");
+                    al_flip_display();
                     return GAME_TERMINATE;
                     break;
+                */
             }
         }
         al_flip_display();
     }
     else if(window == 4){   // win case
         al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2-50 , ALLEGRO_ALIGN_CENTRE, "You Win!!");
-        al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+220 , ALLEGRO_ALIGN_CENTRE, "Press TAB to RESATRT");
-        al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+150 , ALLEGRO_ALIGN_CENTRE, "Press E to END");
-        al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+80 , ALLEGRO_ALIGN_CENTRE, "Press B to STORE");
+        al_flip_display();
         ALLEGRO_EVENT event_w;
         al_wait_for_event(event_queue, &event_w);
         if(event_w.type == ALLEGRO_EVENT_KEY_DOWN){
             switch(event_w.keyboard.keycode){
                 case ALLEGRO_KEY_TAB:
+                    printf("restart\n");
                     blood_down_temp = blood_down_x;
                     window = 1;
                     return PLAY_AGAIN;
                     break;
+                case ALLEGRO_KEY_B:
+                    blood_down_temp = blood_down_x;
+                    store = true;
+                    break;
                 case ALLEGRO_KEY_E:
                     return GAME_TERMINATE;
                     break;
-                case ALLEGRO_KEY_B:
-                    store = true;
-                    break;
                 case ALLEGRO_KEY_ESCAPE:
-                    return GAME_TERMINATE;
-                    break;
-                default:
-                    al_flip_display();
-                    al_rest(5.0);
-                    al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+180 , ALLEGRO_ALIGN_CENTRE, "fuck you !");
                     return GAME_TERMINATE;
                     break;
             }
@@ -546,29 +573,49 @@ int game_run() {
         al_flip_display();
     }
     if(store){   // when we press B , we will go to store
-        al_clear_to_color(al_map_rgb(50,50,50));
-        al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+80 , ALLEGRO_ALIGN_CENTRE, "SHOP : buy overpowered item");
+        printf("enter store\n");
+        al_draw_bitmap(load_bitmap_at_size("store_menu.png",WIDTH,HEIGHT),0,0,0);
         ALLEGRO_EVENT event_s;
         al_wait_for_event(event_queue, &event_s);
         if(event_s.type == ALLEGRO_EVENT_KEY_DOWN){
+            printf("store\n");
             switch(event_s.keyboard.keycode){
                 case ALLEGRO_KEY_1:
+                    enemy_injury = 0;
+                    injury = 0;
                     bullet_addtional_v = 5;
                     MAX_COOLDOWN = 0.025;
                     window = 1;
+                    store = false;
+                    buy_add_bullet = true;
+                    printf("window %d injury %d enemy injury %d\n",window,injury,enemy_injury);
                     return PLAY_AGAIN;
                     break;
                 case ALLEGRO_KEY_2:
+                    enemy_addtional_v = -5;
+                    enemy_MAX_COOLDOWN = 1;
+                    window = 1;
+                    store = false;
+                    printf("2\n");
+                    return PLAY_AGAIN;
+                    break;
+                case ALLEGRO_KEY_3:
                     bullet_addtional_v = -5;
                     enemy_MAX_COOLDOWN = 1;
                     window = 1;
+                    store = false;
+                    return PLAY_AGAIN;
+                    break;
+                case ALLEGRO_KEY_4:
+                    bullet_addtional_v = -5;
+                    enemy_MAX_COOLDOWN = 1;
+                    window = 1;
+                    store = false;
                     return PLAY_AGAIN;
                     break;
                 case ALLEGRO_KEY_E:
                     return GAME_TERMINATE;
                     break;
-                case ALLEGRO_KEY_B:
-                    store = true;
                 case ALLEGRO_KEY_ESCAPE:
                     return GAME_TERMINATE;
                     break;
@@ -579,8 +626,8 @@ int game_run() {
                     return GAME_TERMINATE;
                     break;
             }
+            al_flip_display();
         }
-        al_flip_display();
     }
     return error;
 }
@@ -630,6 +677,27 @@ ALLEGRO_BITMAP *load_bitmap_at_size(const char *filename, int w, int h)
   al_destroy_bitmap(loaded_bmp);
 
   return resized_bmp;
+}
+
+void death_animation(Character obj){  //人物死亡特效
+    float i,j;
+    for(i = obj.y, j = 0; i > obj.y / 4; i -= obj.h / 4, j += 3){   // -/1 跌太少
+        al_clear_to_color(al_map_rgb(0,0,0));
+        al_draw_bitmap(obj.image_path, obj.x, i ,0);
+        al_flip_display();
+        al_rest(0.03);     // 0.02~0.1 is the best scene
+        obj.image_path = load_bitmap_at_size("pegasus.png", obj.w - j, obj.h - j);
+    }
+    al_rest(0.5);
+    for(i, j; i < HEIGHT ; i += obj.h / 4, j += 3){
+        al_clear_to_color(al_map_rgb(0,0,0));
+        al_draw_bitmap(obj.image_path , obj.x, i ,0);
+        al_flip_display();
+        al_rest(0.03);
+        obj.image_path = load_bitmap_at_size("pegasus.png", obj.w - j, obj.h - j);
+    }
+    obj.image_path = load_bitmap_at_size("pegasus.png", obj.w, obj.h);
+    is_death_anime = false;
 }
 
 // +=================================================================+
