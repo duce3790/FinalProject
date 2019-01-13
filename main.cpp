@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_primitives.h>
 #include <allegro5/allegro_image.h>
@@ -7,6 +8,7 @@
 #include <allegro5/allegro_font.h>
 #include <allegro5/allegro_ttf.h>
 
+#define Read_Write
 #define GAME_TERMINATE -1
 #define PLAY_AGAIN 69
 #define MAX_BULLET 14
@@ -30,6 +32,7 @@ ALLEGRO_TIMER *timer = NULL;
 ALLEGRO_TIMER *timer2 = NULL;
 ALLEGRO_TIMER *timer3 = NULL;
 ALLEGRO_SAMPLE *song=NULL;
+ALLEGRO_SAMPLE *song_AGAIN = NULL;
 ALLEGRO_FONT *font = NULL;
 ALLEGRO_BITMAP *load_bitmap_at_size(const char *filename, int w, int h);
 ALLEGRO_DISPLAY_MODE disp_data;
@@ -44,6 +47,7 @@ const int WIDTH = 1750;//disp_data.width
 const int HEIGHT = 800;
 float MAX_COOLDOWN = 0.1;
 float enemy_MAX_COOLDOWN = 0.6;
+float item_MAX_COOLDOWN = 5;
 double last_shoot_timestamp;
 double enemy_shoot_timestamp;
 //draw player blood
@@ -66,9 +70,10 @@ typedef struct character
     int h;
     int w;
     float x,y;
-    float vx,vy;
+    int vx,vy;
     bool hidden;
     ALLEGRO_BITMAP *image_path;
+    int probability;
 
 }Character;
 
@@ -77,6 +82,12 @@ Character character2;
 Character character3;
 character bullets[MAX_BULLET];
 character enemy_bullets[MAX_BULLET_ENEMY];
+Character special_item_speed[2];
+Character special_item_injury[2];
+Character special_item_bullet;
+Character special_item_score[10];
+Character special_item_blood[3];
+Character special_item_star;
 
 int imageWidth = 0;
 int imageHeight = 0;
@@ -87,8 +98,11 @@ bool judge_next_window = false;
 bool ture = true; //true: appear, false: disappear
 bool next = false; //true: trigger
 bool dir = true; //true: left, false: right
+int score = 0;
 bool *keys;
 bool *mouse_state;
+bool input_file = false;
+bool out_file = false;
 int injury_time = 0;
 bool is_injury = true;
 bool store = false;
@@ -96,7 +110,8 @@ bool is_death_anime = false;  // 偵測是否跑過死亡動畫
 //following code is to define the item we buy from shop
 int bullet_addtional_v = 0;  // let players bullet faster
 int enemy_addtional_v = 0;   // let enemy slower
-bool buy_add_bullet = true;
+bool buy_add_bullet = false;
+int bullet_addtional_injury = 0;
 
 void show_err_msg(int msg);
 void game_init();
@@ -105,27 +120,40 @@ int process_event();
 int game_run();
 void game_destroy();
 void death_animation(Character);
+void reflect(int, int, int, int, int);
+void play_music();
+void input();
+void output();
+void item_initialize();
+void update_item();
+void eat_item();
+void draw_item();
 
 int main(int argc, char *argv[]) {
+    #ifdef Read_Write
+    freopen ("file.in", "r", stdin);
+    #endif
     int msg = 0;
 
+    srand(time(NULL));
+
     game_init();
-    //game_log("Game initialized");
     game_begin();
-    //game_log("Allegro5 initialized");
-    //game_log("Game begin");
+
     while (msg != GAME_TERMINATE) {
-        //game_log("Game start event loop");
         msg = game_run();
         if (msg == GAME_TERMINATE)
-            //game_log("Game end");
             printf("Game Over\n");
         else if(msg == PLAY_AGAIN){
-            game_init();
+            al_destroy_sample(song);
+            play_music();
             game_begin();
         }
     }
-
+    #ifdef Read_Write
+    freopen ("file.in", "w", stdout);
+    #endif
+    if(out_file) output();
     game_destroy();
     return 0;
 }
@@ -186,12 +214,10 @@ void game_begin() {
     }
     // Loop the song until the display closes
     al_play_sample(song, 1.0, 0.0,1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
-    //al_clear_to_color(al_map_rgb(100,100,100));
     // Load and draw text
-    font = al_load_ttf_font("pirulen.ttf",12,0);
-    //al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+220 , ALLEGRO_ALIGN_CENTRE, "Press 'Enter' to start");
-    //al_draw_rectangle(WIDTH/2-150, 510, WIDTH/2+150, 550, al_map_rgb(255, 255, 255), 0);
+    font = al_load_ttf_font("pirulen.ttf",70,0);
     al_draw_bitmap(load_bitmap_at_size("menu.png",WIDTH,HEIGHT),0,0,0);
+    al_draw_textf(font,al_map_rgb(0,0,255),WIDTH / 3, 0, 0,"score : %d", score);
     al_flip_display();
 }
 
@@ -242,8 +268,23 @@ int process_event(){
                 case ALLEGRO_KEY_SPACE:
                     keys[SPACE] = true;
                     break;
+                // For Start
+                case ALLEGRO_KEY_ENTER:
+                    judge_next_window = true;
+                    break;
                 case ALLEGRO_KEY_B:
+                    //judge_next_window = true;  // 不太懂
                     store = true;
+                    break;
+                case ALLEGRO_KEY_ALT:    // setting
+                    printf("will enter setting\n");
+                    window = 6;
+                    al_destroy_sample(song);
+                    printf("will play new song\n");
+                    song = al_load_sample("01-What MakesYou Beautiful.flac");
+                    printf("play succeed\n");
+                    al_play_sample(song, 1.0, 0.0, 1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
+                    break;
             }
         }
         else if(event.type == ALLEGRO_EVENT_KEY_UP) {
@@ -265,10 +306,6 @@ int process_event(){
                     break;
                 case ALLEGRO_KEY_ESCAPE:
                     return GAME_TERMINATE;
-                    break;
-                // For Start
-                case ALLEGRO_KEY_ENTER:
-                    judge_next_window = true;
                     break;
             }
         }
@@ -369,7 +406,7 @@ int process_event(){
         for( i = 0; i < MAX_BULLET_ENEMY; ++i){
             if((enemy_bullets[i].x > character1.x) && (enemy_bullets[i].x < character1.x + character1.w)
                &&(enemy_bullets[i].y > character1.y) && (enemy_bullets[i].y < character1.y + character1.h)){
-                injury = 1.0;
+                injury = 5.0;
                 enemy_bullets[i].hidden = true;
                 break;
             }
@@ -380,10 +417,42 @@ int process_event(){
             if((bullets[i].x > character2.x) && (bullets[i].x < character2.x + character2.w)
                &&(bullets[i].y > character2.y) && (bullets[i].y < character2.y + character2.h)){
                 enemy_injury = 1.0;
+                enemy_injury += bullet_addtional_injury;
                 bullets[i].hidden = true;
                 break;
             }
         }
+
+        //  一些特殊道具
+        for(i = 0; i < 2; ++i) special_item_speed[i].probability = (rand() % 500000) % 500000;
+        for(i = 0; i < 2; ++i) special_item_injury[i].probability = (rand() % 500000) % 500000;
+        //special_item_bullet.probability = (rand() % 100) % 2147483;
+        for(i = 0; i < 10; ++i) special_item_score[i].probability = (rand() % 500000) % 1000;
+        for(i = 0; i < 3; ++i) special_item_blood[i].probability = (rand() % 500000) % 10000;
+        //special_item_star.probability = (rand() % 100) % 2147483;
+
+        for(i = 0; i < 2; ++i){
+            if(special_item_speed[i].probability == 0)
+                special_item_speed[i].hidden = false;
+            if(special_item_injury[i].probability == 0)
+                special_item_injury[i].hidden = false;
+
+        }
+            //if(special_item_bullet[i].probability == 0)
+                //special_item_bullet[i].hidden = false;
+        for(i = 0; i < 10; ++i){
+            if(special_item_score[i].probability == 0)
+                special_item_score[i].hidden = false;
+        }
+        for(i = 0; i < 3; ++i){
+            if(special_item_blood[i].probability == 0)
+                special_item_blood[i].hidden = false;
+        }
+            //if(special_item_star[i].probability == 0)
+            //    special_item_star[i].hidden = false;
+
+        update_item();
+        eat_item();
     }
 
     // Shutdown our program
@@ -433,11 +502,12 @@ int game_run(){
                 for (i = 0; i < MAX_BULLET_ENEMY; i++) {
                     enemy_bullets[i].w = 30;
                     enemy_bullets[i].h = 30;
-                    enemy_bullets[i].image_path = load_bitmap_at_size("bulletbt.png",bullets[i].w,bullets[i].h);
+                    enemy_bullets[i].image_path = load_bitmap_at_size("bulletbt.png",enemy_bullets[i].w,enemy_bullets[i].h);
                     enemy_bullets[i].vx = -20;
                     enemy_bullets[i].vy = 0;
                     enemy_bullets[i].hidden = true;
                 }
+                item_initialize();
                 //Initialize Timer
                 timer  = al_create_timer(1.0/15.0);
                 timer2  = al_create_timer(1.0);
@@ -454,10 +524,18 @@ int game_run(){
                 blood_down_temp = blood_down_x;
                 enemy_blood_down_x = blood_top_x + blood_between_distance + blood_width;
                 blood_top_temp = blood_top_x + blood_between_distance;
+
+                // 決定是否要在 setting時 input file
+                // intput file
+                if(input_file){
+                    // read file
+                    //change blood
+                    input();
+                }
             }
         }
     }
-    else if(window == 2 && !store){   // Second window(Main Game)
+    else if(window == 2){   // Second window(Main Game)
         // Change Image for animation
         al_draw_bitmap(background, 0,0, 0);
         int i;
@@ -497,8 +575,14 @@ int game_run(){
                 al_draw_bitmap(enemy_bullets[i].image_path,enemy_bullets[i].x,enemy_bullets[i].y,0);
         }
 
+        draw_item();
+
+        al_draw_textf(font,al_map_rgb(0,0,255),WIDTH / 3, 0, 0,"score : %d", score);
+
         if(dir) al_draw_bitmap(character2.image_path, character2.x, character2.y, 0);
         else al_draw_bitmap(character3.image_path, character2.x, character2.y, 0);
+
+
 
         al_flip_display();
         al_clear_to_color(al_map_rgb(0,0,0));
@@ -509,7 +593,7 @@ int game_run(){
         }
     }
     else if(window == 3){   // lose case
-        al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2-50 , ALLEGRO_ALIGN_CENTRE, "You Win!!");
+        al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2-50 , ALLEGRO_ALIGN_CENTRE, "You LOse!!");
         al_flip_display();
         if( is_death_anime )  death_animation(character1);
         ALLEGRO_EVENT event_r_e;
@@ -520,6 +604,7 @@ int game_run(){
                     printf("restart\n");
                     blood_down_temp = blood_down_x;
                     window = 1;
+                    judge_next_window = false;
                     return PLAY_AGAIN;
                     break;
                 case ALLEGRO_KEY_B:
@@ -556,6 +641,7 @@ int game_run(){
                     printf("restart\n");
                     blood_down_temp = blood_down_x;
                     window = 1;
+                    judge_next_window = false;
                     return PLAY_AGAIN;
                     break;
                 case ALLEGRO_KEY_B:
@@ -572,61 +658,166 @@ int game_run(){
         }
         al_flip_display();
     }
-    if(store){   // when we press B , we will go to store
-        printf("enter store\n");
-        al_draw_bitmap(load_bitmap_at_size("store_menu.png",WIDTH,HEIGHT),0,0,0);
-        ALLEGRO_EVENT event_s;
-        al_wait_for_event(event_queue, &event_s);
-        if(event_s.type == ALLEGRO_EVENT_KEY_DOWN){
-            printf("store\n");
-            switch(event_s.keyboard.keycode){
+    else if(window == 6){
+        //setting
+        printf("enter setting\n");
+        al_draw_bitmap(load_bitmap_at_size("setting_menu.png",WIDTH,HEIGHT), 0, 0, 0);
+        al_flip_display();
+        ALLEGRO_EVENT event_r_e;
+        al_wait_for_event(event_queue, &event_r_e);
+        if(event_r_e.type == ALLEGRO_EVENT_KEY_DOWN){
+                printf("detect event\n");
+            switch(event_r_e.keyboard.keycode){
                 case ALLEGRO_KEY_1:
-                    enemy_injury = 0;
-                    injury = 0;
-                    bullet_addtional_v = 5;
-                    MAX_COOLDOWN = 0.025;
-                    window = 1;
-                    store = false;
-                    buy_add_bullet = true;
-                    printf("window %d injury %d enemy injury %d\n",window,injury,enemy_injury);
-                    return PLAY_AGAIN;
+                    printf("play new music\n");
+                    al_destroy_sample(song);
+                    song = al_load_sample ( "chao_chao.flac" );
+                    al_play_sample(song, 1.0, 0.0,1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
                     break;
                 case ALLEGRO_KEY_2:
-                    enemy_addtional_v = -5;
-                    enemy_MAX_COOLDOWN = 1;
-                    window = 1;
-                    store = false;
-                    printf("2\n");
-                    return PLAY_AGAIN;
+                    al_destroy_sample(song);
+                    song = al_load_sample ( "Perrywinkle.wav" );
+                    al_play_sample(song, 1.0, 0.0,1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
                     break;
                 case ALLEGRO_KEY_3:
-                    bullet_addtional_v = -5;
-                    enemy_MAX_COOLDOWN = 1;
-                    window = 1;
-                    store = false;
-                    return PLAY_AGAIN;
+                    al_destroy_sample(song);
+                    song = al_load_sample ( "Laugh_and_Cry.wav" );
+                    al_play_sample(song, 1.0, 0.0,1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
                     break;
-                case ALLEGRO_KEY_4:
-                    bullet_addtional_v = -5;
-                    enemy_MAX_COOLDOWN = 1;
-                    window = 1;
-                    store = false;
-                    return PLAY_AGAIN;
+                case ALLEGRO_KEY_I:
+                    input();
                     break;
-                case ALLEGRO_KEY_E:
-                    return GAME_TERMINATE;
+                case ALLEGRO_KEY_S:
+                    out_file = true;
+                    break;
+                case ALLEGRO_KEY_BACKSPACE:
+                    window = 1;
+                    al_draw_bitmap(load_bitmap_at_size("menu.png",WIDTH,HEIGHT),0,0,0);
+                    al_flip_display();
                     break;
                 case ALLEGRO_KEY_ESCAPE:
                     return GAME_TERMINATE;
                     break;
                 default:
-                    al_flip_display();
-                    al_rest(5.0);
+                    al_clear_to_color(al_map_rgb(0,0,0));
                     al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+180 , ALLEGRO_ALIGN_CENTRE, "fuck you !");
-                    return GAME_TERMINATE;
+                    al_flip_display();
+                    al_rest(1.0);
                     break;
             }
-            al_flip_display();
+        }
+    }
+    if(store){   // when we press B , we will go to store
+        if(!al_is_event_queue_empty(event_queue)){
+            printf("enter store\n");
+            al_draw_bitmap(load_bitmap_at_size("store_menu.png",WIDTH,HEIGHT),0,0,0);
+            al_draw_textf(font,al_map_rgb(0,0,255),WIDTH / 3, 0, 0,"score : %d", score);
+            ALLEGRO_EVENT event_s;
+            al_wait_for_event(event_queue, &event_s);
+            if(event_s.type == ALLEGRO_EVENT_KEY_DOWN){
+                printf("store\n");
+                switch(event_s.keyboard.keycode){
+                    case ALLEGRO_KEY_1:
+                        if(score - 10 >= 0){
+                            printf("buy_1\n");
+                            //enemy_injury = 0;
+                            //injury = 0;
+                            bullet_addtional_v = 5;
+                            MAX_COOLDOWN = 0.025;
+                            window = 1;
+                            store = false;
+                            al_clear_to_color(al_map_rgb(0,0,0));
+                            al_draw_textf(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+180 , ALLEGRO_ALIGN_CENTRE, "rate of shot increase !");
+                            al_flip_display();
+                            al_rest(1.0);
+                        }
+                        else{
+                            al_clear_to_color(al_map_rgb(0,0,0));
+                            al_draw_textf(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+180 , ALLEGRO_ALIGN_CENTRE, "Are you idiet ?");
+                            al_draw_textf(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+195 , ALLEGRO_ALIGN_CENTRE, "not enough money !");
+                            al_flip_display();
+                            al_rest(1.0);
+                        }
+                        //return PLAY_AGAIN;
+                        break;
+                    case ALLEGRO_KEY_2:
+                        if(score - 50 >= 0){
+                                enemy_addtional_v = -5;
+                                enemy_MAX_COOLDOWN = 1;
+                                window = 1;
+                                store = false;
+                                al_clear_to_color(al_map_rgb(0,0,0));
+                                al_draw_textf(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+180 , ALLEGRO_ALIGN_CENTRE, "rate of shot increase !");
+                                al_flip_display();
+                                al_rest(1.0);
+                            }
+                        else{
+                                al_clear_to_color(al_map_rgb(0,0,0));
+                                al_draw_textf(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+180 , ALLEGRO_ALIGN_CENTRE, "Are you idiet ?");
+                                al_draw_textf(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+195 , ALLEGRO_ALIGN_CENTRE, "not enough money !");
+                                al_flip_display();
+                                al_rest(1.0);
+                        }
+                        //return PLAY_AGAIN;
+                    break;
+                    case ALLEGRO_KEY_3:
+                        if(score - 10 >= 0){
+                            //enemy_injury = 0;
+                            //injury = 0;
+                            bullet_addtional_v = 5;
+                            MAX_COOLDOWN = 0.025;
+                            window = 1;
+                            store = false;
+                            buy_add_bullet = true;
+                            al_clear_to_color(al_map_rgb(0,0,0));
+                            al_draw_textf(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+180 , ALLEGRO_ALIGN_CENTRE, "rate of shot increase !");
+                            al_flip_display();
+                            al_rest(1.0);
+                        }
+                        else{
+                            al_clear_to_color(al_map_rgb(0,0,0));
+                            al_draw_textf(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+180 , ALLEGRO_ALIGN_CENTRE, "Are you idiet ?");
+                            al_draw_textf(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+195 , ALLEGRO_ALIGN_CENTRE, "not enough money !");
+                            al_flip_display();
+                            al_rest(1.0);
+                        }
+                        break;
+                    case ALLEGRO_KEY_4:
+                        if(score - 10 >= 0){
+                            printf("buy_4\n");
+                            character1.vy = - (character1.vx);
+                            window = 1;
+                            store = false;
+                            buy_add_bullet = true;
+                            al_clear_to_color(al_map_rgb(0,0,0));
+                            al_draw_textf(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+180 , ALLEGRO_ALIGN_CENTRE, "numbers of bullet increase !");
+                            al_flip_display();
+                            al_rest(1.0);
+                        }
+                        else{
+                            printf("can't_buy_4\n");
+                            al_clear_to_color(al_map_rgb(0,0,0));
+                            al_draw_textf(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+180 , ALLEGRO_ALIGN_CENTRE, "Are you idiet ?");
+                            al_draw_textf(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+195 , ALLEGRO_ALIGN_CENTRE, "not enough money !");
+                            al_flip_display();
+                            al_rest(1.0);
+                        }
+                        break;
+                    case ALLEGRO_KEY_E:
+                        return GAME_TERMINATE;
+                        break;
+                    case ALLEGRO_KEY_ESCAPE:
+                        return GAME_TERMINATE;
+                        break;
+                    default:
+                        al_flip_display();
+                        al_rest(5.0);
+                        al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+180 , ALLEGRO_ALIGN_CENTRE, "fuck you !");
+                        return GAME_TERMINATE;
+                        break;
+                }
+                al_flip_display();
+            }
         }
     }
     return error;
@@ -640,6 +831,7 @@ void game_destroy() {
     al_destroy_timer(timer2);
     al_destroy_bitmap(image);
     al_destroy_sample(song);
+    al_destroy_sample(song_AGAIN);
 }
 
 ALLEGRO_BITMAP *load_bitmap_at_size(const char *filename, int w, int h)
@@ -700,45 +892,178 @@ void death_animation(Character obj){  //人物死亡特效
     is_death_anime = false;
 }
 
-// +=================================================================+
-// | Code below is for debugging purpose, it's fine to remove it.    |
-// | Deleting the code below and removing all calls to the functions |
-// | doesn't affect the game.                                        |
-// +=================================================================+
-
-void game_abort(const char* format, ...) {
-    va_list arg;
-    va_start(arg, format);
-    game_vlog(format, arg);
-    va_end(arg);
-    fprintf(stderr, "error occured, exiting after 2 secs");
-    // Wait 2 secs before exiting.
-    al_rest(2);
-    // Force exit program.
-    exit(1);
-}
-
-void game_log(const char* format, ...) {
-#ifdef LOG_ENABLED
-    va_list arg;
-    va_start(arg, format);
-    game_vlog(format, arg);
-    va_end(arg);
-#endif
-}
-
-void game_vlog(const char* format, va_list arg) {
-#ifdef LOG_ENABLED
-    static bool clear_file = true;
-    vprintf(format, arg);
-    printf("\n");
-    // Write log to file for later debugging.
-    FILE* pFile = fopen("log.txt", clear_file ? "w" : "a");
-    if (pFile) {
-        vfprintf(pFile, format, arg);
-        fprintf(pFile, "\n");
-        fclose(pFile);
+void play_music(){
+    song_AGAIN = al_load_sample( "Sunshine.wav" );
+    if (!song){
+        printf( "Audio clip sample not loaded!\n" );
+        show_err_msg(-6);
     }
-    clear_file = false;
-#endif
+    // Loop the song until the display closes
+    al_play_sample(song_AGAIN, 0.5, 0.0,1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
 }
+
+void input(){
+    scanf("%f", &blood_down_temp);
+    scanf("%f", &enemy_blood_down_x);
+    scanf("%f", &enemy_injury);
+    scanf("%d", &score);
+}
+
+void output(){
+    printf("%f\n", blood_down_temp);
+    printf("%f\n", enemy_blood_down_x);
+    printf("%f\n", enemy_injury);
+    printf("%d\n",score);
+}
+
+void item_initialize(){
+    int i;
+    for(i = 0; i < 2; ++i){
+        special_item_speed[i].w = 40;
+        special_item_speed[i].h = 40;
+        special_item_speed[i].image_path = load_bitmap_at_size("bullet.png",special_item_speed[i].w,special_item_speed[i].h);
+        special_item_speed[i].vx = -20 ;
+        special_item_speed[i].vy = (rand() % 41) - 20;
+        special_item_speed[i].hidden = true;
+        special_item_speed[i].x = WIDTH;
+        special_item_speed[i].y = rand() % HEIGHT;
+    }
+    for(i = 0; i < 2; ++i){
+        special_item_injury[i].w = 40;
+        special_item_injury[i].h = 40;
+        special_item_injury[i].image_path = load_bitmap_at_size("bullet.png",special_item_injury[i].w,special_item_injury[i].h);
+        special_item_injury[i].vx = -20 ;
+        special_item_injury[i].vy = (rand() % 41) - 20;
+        special_item_injury[i].hidden = true;
+        special_item_injury[i].x = WIDTH;
+        special_item_injury[i].y = rand() % HEIGHT;
+    }
+    for(i = 0; i < 10; ++i){
+        special_item_score[i].w = 40;
+        special_item_score[i].h = 40;
+        special_item_score[i].image_path = load_bitmap_at_size("bullet.png",special_item_score[i].w,special_item_score[i].h);
+        special_item_score[i].vx = -20 ;
+        special_item_score[i].vy = (rand() % 41) - 20;
+        special_item_score[i].hidden = true;
+        special_item_score[i].x = WIDTH;
+        special_item_score[i].y = rand() % HEIGHT;
+    }
+    for(i = 0; i < 3; ++i){
+        special_item_blood[i].w = 40;
+        special_item_blood[i].h = 40;
+        special_item_blood[i].image_path = load_bitmap_at_size("bullet.png",special_item_blood[i].w,special_item_blood[i].h);
+        special_item_blood[i].vx = -20 ;
+        special_item_blood[i].vy = (rand() % 41) - 20;
+        special_item_blood[i].hidden = true;
+        special_item_blood[i].x = WIDTH;
+        special_item_blood[i].y = rand() % HEIGHT;
+    }
+}
+
+void update_item(){
+    int i;
+    for(i = 0; i < 2; ++i){
+        if (special_item_speed[i].hidden)
+                continue;
+            special_item_speed[i].x += special_item_speed[i].vx;
+            special_item_speed[i].y += special_item_speed[i].vy;
+            if (special_item_speed[i].x < 0)
+                special_item_speed[i].hidden = true;
+            if(special_item_speed[i].y > 0 || special_item_speed[i].y > HEIGHT)
+                special_item_speed[i].vy *= -1;
+    }
+    for(i = 0; i < 2; ++i){
+        if (special_item_injury[i].hidden)
+                continue;
+            special_item_injury[i].x += special_item_injury[i].vx;
+            special_item_injury[i].y += special_item_injury[i].vy;
+            if (special_item_injury[i].x < 0)
+                special_item_injury[i].hidden = true;
+            if(special_item_injury[i].y < 0 || special_item_injury[i].y > HEIGHT)
+                special_item_injury[i].vy *= -1;
+    }
+    for(i = 0; i < 10; ++i){
+        if (special_item_score[i].hidden)
+                continue;
+            special_item_score[i].x += special_item_score[i].vx;
+            special_item_score[i].y += special_item_score[i].vy;
+            if (special_item_score[i].x < 0)
+                special_item_score[i].hidden = true;
+            if(special_item_score[i].y < 0 || special_item_score[i].y > HEIGHT)
+                special_item_score[i].vy *= -1;
+
+    }
+    for(i = 0; i < 3; ++i){
+        if (special_item_blood[i].hidden)
+                continue;
+            special_item_blood[i].x += special_item_blood[i].vx;
+            special_item_blood[i].y += special_item_blood[i].vy;
+            if (special_item_blood[i].x < 0)
+                special_item_blood[i].hidden = true;
+            if(special_item_blood[i].y < 0 || special_item_blood[i].y > HEIGHT)
+                special_item_blood[i].vy *= -1;
+    }
+}
+
+void eat_item(){
+    int i;
+
+    for(i = 0; i < 2; ++i){
+        if((special_item_speed[i].x > character1.x) && (special_item_speed[i].x < character1.x + character1.w)
+               &&(special_item_speed[i].y > character1.y) && (special_item_speed[i].y < character1.y + character1.h)){
+                bullet_addtional_v = 5;
+                special_item_speed[i].hidden = true;
+                break;
+        }
+    }
+    for(i = 0; i < 2; ++i){
+        if((special_item_injury[i].x > character1.x) && (special_item_injury[i].x < character1.x + character1.w)
+               &&(special_item_injury[i].y > character1.y) && (special_item_injury[i].y < character1.y + character1.h)){
+                bullet_addtional_injury = 4;
+                special_item_injury[i].hidden = true;
+                break;
+        }
+    }
+    for(i = 0; i < 10; ++i){
+        if((special_item_score[i].x > character1.x) && (special_item_score[i].x < character1.x + character1.w)
+               &&(special_item_score[i].y > character1.y) && (special_item_score[i].y < character1.y + character1.h)){
+                score += 3;
+                special_item_score[i].hidden = true;
+                break;
+        }
+    }
+    for(i = 0; i < 3; ++i){
+        if((special_item_blood[i].x > character1.x) && (special_item_blood[i].x < character1.x + character1.w)
+               &&(special_item_blood[i].y > character1.y) && (special_item_blood[i].y < character1.y + character1.h)){
+                if(blood_down_temp < blood_down_x)
+                blood_down_temp += 10;
+                special_item_blood[i].hidden = true;
+                break;
+        }
+    }
+}
+
+void draw_item(){
+    int i;
+
+    for(i = 0; i < 2; ++i){
+        if(!special_item_speed[i].hidden)
+                al_draw_bitmap(special_item_speed[i].image_path,special_item_speed[i].x,special_item_speed[i].y,0);
+    }
+    for(i = 0; i < 2; ++i){
+        if(!special_item_injury[i].hidden)
+                al_draw_bitmap(special_item_injury[i].image_path,special_item_injury[i].x,special_item_injury[i].y,0);
+    }
+    for(i = 0; i < 10; ++i){
+        if(!special_item_score[i].hidden){
+             al_draw_bitmap(special_item_score[i].image_path,special_item_score[i].x,special_item_score[i].y,0);
+        }
+
+    }
+    for(i = 0; i < 3; ++i){
+        if(!special_item_blood[i].hidden)
+                al_draw_bitmap(special_item_blood[i].image_path,special_item_blood[i].x,special_item_blood[i].y,0);
+    }
+}
+
+
