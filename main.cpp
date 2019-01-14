@@ -32,7 +32,7 @@ ALLEGRO_TIMER *timer = NULL;
 ALLEGRO_TIMER *timer2 = NULL;
 ALLEGRO_TIMER *timer3 = NULL;
 ALLEGRO_SAMPLE *song=NULL;
-ALLEGRO_SAMPLE *song_AGAIN = NULL;
+//ALLEGRO_SAMPLE *song_AGAIN = NULL;
 ALLEGRO_FONT *font = NULL;
 ALLEGRO_BITMAP *load_bitmap_at_size(const char *filename, int w, int h);
 ALLEGRO_DISPLAY_MODE disp_data;
@@ -43,10 +43,10 @@ void game_vlog(const char* format, va_list arg);
 //Custom Definition
 const char *title = "Final Project 107060007";
 const float FPS = 60;
-const int WIDTH = 1750;//disp_data.width
-const int HEIGHT = 800;
+int WIDTH = 900;//disp_data.width
+int HEIGHT = 600;
 float MAX_COOLDOWN = 0.1;
-float enemy_MAX_COOLDOWN = 0.6;
+float enemy_MAX_COOLDOWN = 1;
 float item_MAX_COOLDOWN = 5;
 double last_shoot_timestamp;
 double enemy_shoot_timestamp;
@@ -55,7 +55,7 @@ float blood_top_x = 5.0;
 float blood_top_y = 10.0;
 float blood_height = 20.0;
 float blood_width = 300.0;
-float blood_between_distance = 1470.0;
+float blood_between_distance = WIDTH - blood_width;  //1470
 float blood_down_x;
 float blood_down_y;
 float blood_down_temp;
@@ -112,6 +112,8 @@ int bullet_addtional_v = 0;  // let players bullet faster
 int enemy_addtional_v = 0;   // let enemy slower
 bool buy_add_bullet = false;
 int bullet_addtional_injury = 0;
+int hard = 1; //遊戲難度
+int play_song = 0;
 
 void show_err_msg(int msg);
 void game_init();
@@ -120,7 +122,6 @@ int process_event();
 int game_run();
 void game_destroy();
 void death_animation(Character);
-void reflect(int, int, int, int, int);
 void play_music();
 void input();
 void output();
@@ -128,30 +129,34 @@ void item_initialize();
 void update_item();
 void eat_item();
 void draw_item();
+void start_animation();
 
 int main(int argc, char *argv[]) {
     #ifdef Read_Write
-    freopen ("file.in", "r", stdin);
+    freopen ("file.txt", "r", stdin);
     #endif
     int msg = 0;
 
     srand(time(NULL));
 
     game_init();
+    //start_animation();
     game_begin();
-
+    al_get_display_mode(al_get_num_display_modes() - 1, &disp_data);
     while (msg != GAME_TERMINATE) {
         msg = game_run();
         if (msg == GAME_TERMINATE)
             printf("Game Over\n");
         else if(msg == PLAY_AGAIN){
-            al_destroy_sample(song);
-            play_music();
+            //al_destroy_sample(song);
+            //al_destroy_sample(song);
+            //song = al_load_sample("hello.wav");
+            //al_play_sample(song, 1.0, 0.0, 1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
             game_begin();
         }
     }
     #ifdef Read_Write
-    freopen ("file.in", "w", stdout);
+    freopen ("file.txt", "w", stdout);
     #endif
     if(out_file) output();
     game_destroy();
@@ -207,7 +212,8 @@ void game_init() {
 
 void game_begin() {
     // Load sound
-    song = al_load_sample( "hello.wav" );
+    al_destroy_sample(song);
+    song = al_load_sample( "Killer Tracks - Paradise Awaits.wav" );
     if (!song){
         printf( "Audio clip sample not loaded!\n" );
         show_err_msg(-1);
@@ -215,9 +221,9 @@ void game_begin() {
     // Loop the song until the display closes
     al_play_sample(song, 1.0, 0.0,1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
     // Load and draw text
-    font = al_load_ttf_font("pirulen.ttf",70,0);
+    font = al_load_ttf_font("pirulen.ttf",30,0);
     al_draw_bitmap(load_bitmap_at_size("menu.png",WIDTH,HEIGHT),0,0,0);
-    al_draw_textf(font,al_map_rgb(0,0,255),WIDTH / 3, 0, 0,"score : %d", score);
+    //al_draw_textf(font,al_map_rgb(240,240,240),WIDTH  * 5 / 12, 0, 0,"score : %d", score);
     al_flip_display();
 }
 
@@ -226,7 +232,7 @@ int process_event(){
     ALLEGRO_EVENT event;
     al_wait_for_event(event_queue, &event);
 
-    if(!store){
+    //if(!store){
         // Our setting for controlling animation
         if(event.timer.source == timer){
             if(character2.y < 0)
@@ -234,7 +240,7 @@ int process_event(){
             else if(character2.y > HEIGHT - character2.h)
                 dir = true;
 
-            character2.vy = abs(rand()%10 + enemy_addtional_v);
+            character2.vy = abs(rand()%31-10 + enemy_addtional_v);
 
             if(dir) character2.y -= character2.vy ;
             else character2.y += character2.vy;
@@ -271,10 +277,19 @@ int process_event(){
                 // For Start
                 case ALLEGRO_KEY_ENTER:
                     judge_next_window = true;
+                    al_destroy_sample(song);
+                    song = al_load_sample("9th_Symphony_Finale_by_Beethoven.wav");
+                    al_play_sample(song, 1.0, 0.0, 1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
+                    if(HEIGHT != disp_data.height)
+                        al_draw_textf(font,al_map_rgb(240,240,240),WIDTH * 9 / 24, HEIGHT - 50, 0,"Level : %d", hard);
+                    else
+                        al_draw_textf(font,al_map_rgb(240,240,240),WIDTH * 9 / 24, HEIGHT - 100, 0,"Level : %d", hard);
+                    al_flip_display();
+                    al_rest(1);
                     break;
                 case ALLEGRO_KEY_B:
-                    //judge_next_window = true;  // 不太懂
-                    store = true;
+                    //judge_next_window = true;
+                    window = 5;
                     break;
                 case ALLEGRO_KEY_ALT:    // setting
                     printf("will enter setting\n");
@@ -284,6 +299,16 @@ int process_event(){
                     song = al_load_sample("01-What MakesYou Beautiful.flac");
                     printf("play succeed\n");
                     al_play_sample(song, 1.0, 0.0, 1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
+                    break;
+                case ALLEGRO_KEY_BACKSPACE:
+                    //game_destroy();
+                    judge_next_window = false;
+                    window = 1;
+                    al_destroy_sample(song);
+                    song = al_load_sample("Killer Tracks - Paradise Awaits.wav");
+                    al_play_sample(song, 1.0, 0.0, 1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
+                    al_draw_bitmap(load_bitmap_at_size("menu.png",WIDTH,HEIGHT),0,0,0);
+                    al_flip_display();
                     break;
             }
         }
@@ -342,16 +367,16 @@ int process_event(){
             }
         }
 
-        for (i = 0; i < MAX_BULLET_ENEMY; i += 2) {
+        for (i = 0; i < MAX_BULLET_ENEMY; i ++) {
             if (enemy_bullets[i].hidden)
                 continue;
             enemy_bullets[i].x += enemy_bullets[i].vx;
             enemy_bullets[i].y += enemy_bullets[i].vy;
-            enemy_bullets[i+1].x += enemy_bullets[i+1].vx;
-            enemy_bullets[i+1].y += enemy_bullets[i+1].vy;
+            //enemy_bullets[i+1].x += enemy_bullets[i+1].vx;
+            //enemy_bullets[i+1].y += enemy_bullets[i+1].vy;
             if (enemy_bullets[i].x < 0){
                 enemy_bullets[i].hidden = true;
-                enemy_bullets[i+1].hidden = true;
+                //enemy_bullets[i+1].hidden = true;
             }
         }
 
@@ -406,7 +431,9 @@ int process_event(){
         for( i = 0; i < MAX_BULLET_ENEMY; ++i){
             if((enemy_bullets[i].x > character1.x) && (enemy_bullets[i].x < character1.x + character1.w)
                &&(enemy_bullets[i].y > character1.y) && (enemy_bullets[i].y < character1.y + character1.h)){
-                injury = 5.0;
+                injury = 10.0;
+                if (enemy_bullets[i].hidden == false)
+                    blood_down_temp -= injury;
                 enemy_bullets[i].hidden = true;
                 break;
             }
@@ -416,8 +443,10 @@ int process_event(){
         for( i = 0; i < MAX_BULLET; ++i){
             if((bullets[i].x > character2.x) && (bullets[i].x < character2.x + character2.w)
                &&(bullets[i].y > character2.y) && (bullets[i].y < character2.y + character2.h)){
-                enemy_injury = 1.0;
+                enemy_injury = 10.0;
                 enemy_injury += bullet_addtional_injury;
+                if(bullets[i].hidden == false)
+                    blood_top_temp += enemy_injury;
                 bullets[i].hidden = true;
                 break;
             }
@@ -453,7 +482,7 @@ int process_event(){
 
         update_item();
         eat_item();
-    }
+    //}
 
     // Shutdown our program
     if(event.type == ALLEGRO_EVENT_DISPLAY_CLOSE)
@@ -466,6 +495,13 @@ int game_run(){
     int error = 0;
     // First window(Menu)
     if(window == 1){
+        keys[UP] = false;
+        keys[DOWN] = false;
+        keys[LEFT] = false;
+        keys[RIGHT] = false;
+        keys[SPACE] = false;
+        al_draw_textf(font,al_map_rgb(240,240,240),WIDTH  * 9 / 24, 0, 0,"score : %d", score);
+        al_flip_display();
         if (!al_is_event_queue_empty(event_queue)) {
             error = process_event();
             if(judge_next_window) {
@@ -486,8 +522,8 @@ int game_run(){
                 character2.vx = 0;
                 character2.vy = 20;
                 character1.image_path = load_bitmap_at_size("pegasus.png",character1.w,character1.h);
-                character2.image_path = load_bitmap_at_size("teemo_left.png",character2.w,character2.h);
-                character3.image_path = load_bitmap_at_size("teemo_right.png",character2.w,character2.h);
+                character2.image_path = load_bitmap_at_size("demon.png",character2.w,character2.h);
+                character3.image_path = load_bitmap_at_size("demon.png",character2.w,character2.h);
                 background = load_bitmap_at_size("background_2.jpg",WIDTH,HEIGHT);
                 int i;
                 for (i = 0; i < MAX_BULLET; i++) {
@@ -504,11 +540,14 @@ int game_run(){
                     enemy_bullets[i].h = 30;
                     enemy_bullets[i].image_path = load_bitmap_at_size("bulletbt.png",enemy_bullets[i].w,enemy_bullets[i].h);
                     enemy_bullets[i].vx = -20;
-                    enemy_bullets[i].vy = 0;
+                    enemy_bullets[i].vy = (rand() % 41) - 20;
                     enemy_bullets[i].hidden = true;
                 }
                 item_initialize();
                 //Initialize Timer
+                al_destroy_timer(timer);
+                al_destroy_timer(timer2);
+                al_destroy_timer(timer3);
                 timer  = al_create_timer(1.0/15.0);
                 timer2  = al_create_timer(1.0);
                 timer3  = al_create_timer(1.0/10.0);
@@ -524,6 +563,8 @@ int game_run(){
                 blood_down_temp = blood_down_x;
                 enemy_blood_down_x = blood_top_x + blood_between_distance + blood_width;
                 blood_top_temp = blood_top_x + blood_between_distance;
+                injury = 0.0;
+                enemy_injury = 0.0;
 
                 // 決定是否要在 setting時 input file
                 // intput file
@@ -531,6 +572,7 @@ int game_run(){
                     // read file
                     //change blood
                     input();
+
                 }
             }
         }
@@ -542,29 +584,32 @@ int game_run(){
         if(ture) al_draw_bitmap(character1.image_path, character1.x, character1.y, 0);
         //blood
         //player
-
         if( blood_top_x <= blood_down_temp ){
             al_draw_rectangle(blood_top_x-0.5, blood_top_y-0.5, blood_down_x+1, blood_down_y+1, al_map_rgb(255, 255, 255), 1.0);
             al_draw_filled_rectangle(blood_top_x, blood_top_y, blood_down_temp, blood_down_y, al_map_rgb(255, 0, 0));
-            blood_down_temp -= injury;
+
         }
         else{
             window = 3; // you lose
             is_death_anime = true;  // run death animation
             //al_rest(2.0);
+            al_destroy_sample(song);
+            song = al_load_sample("voice_22448.wav");
+            al_play_sample(song, 1.0, 0.0, 1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
         }
-        injury = 0.0;
         //enermy
         if( enemy_blood_down_x >= blood_top_temp ){
             al_draw_rectangle(blood_top_x + blood_between_distance -0.5, blood_top_y-0.5, enemy_blood_down_x + 1, blood_down_y+1, al_map_rgb(255, 255, 255), 1.0);
             al_draw_filled_rectangle(blood_top_temp ,blood_top_y ,enemy_blood_down_x ,blood_down_y,al_map_rgb(255, 0, 0));
-            blood_top_temp += enemy_injury;
 
         }
         else{
             window = 4;  // you win
+            hard += 1;
+            al_destroy_sample(song);
+            song = al_load_sample("musicwin.wav");
+            al_play_sample(song, 1.0, 0.0, 1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
         }
-        enemy_injury = 0.0;
 
         for (i = 0; i < MAX_BULLET; i++){
             if(!bullets[i].hidden)
@@ -577,12 +622,13 @@ int game_run(){
 
         draw_item();
 
-        al_draw_textf(font,al_map_rgb(0,0,255),WIDTH / 3, 0, 0,"score : %d", score);
+        al_draw_textf(font,al_map_rgb(240,240,240),WIDTH * 9 / 24, 0, 0,"score : %d", score);
 
         if(dir) al_draw_bitmap(character2.image_path, character2.x, character2.y, 0);
         else al_draw_bitmap(character3.image_path, character2.x, character2.y, 0);
 
-
+        enemy_MAX_COOLDOWN = ( rand() %  21 - 2 * hard) + 9 - hard;
+        enemy_MAX_COOLDOWN *= 0.1;
 
         al_flip_display();
         al_clear_to_color(al_map_rgb(0,0,0));
@@ -593,18 +639,24 @@ int game_run(){
         }
     }
     else if(window == 3){   // lose case
-        al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2-50 , ALLEGRO_ALIGN_CENTRE, "You LOse!!");
+        hard = 1;
+        al_draw_bitmap(load_bitmap_at_size("lose.png",WIDTH,HEIGHT),0,0,0);
         al_flip_display();
         if( is_death_anime )  death_animation(character1);
         ALLEGRO_EVENT event_r_e;
         al_wait_for_event(event_queue, &event_r_e);
+        //play_music();
         if(event_r_e.type == ALLEGRO_EVENT_KEY_DOWN){
             switch(event_r_e.keyboard.keycode){
-                case ALLEGRO_KEY_TAB:
+                case ALLEGRO_KEY_BACKSPACE:
                     printf("restart\n");
                     blood_down_temp = blood_down_x;
+                    blood_top_temp = blood_top_x + blood_between_distance;
                     window = 1;
                     judge_next_window = false;
+                    al_destroy_sample(song);
+                    song = al_load_sample("Killer Tracks - Paradise Awaits.wav");
+                    al_play_sample(song, 1.0, 0.0, 1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
                     return PLAY_AGAIN;
                     break;
                 case ALLEGRO_KEY_B:
@@ -631,17 +683,20 @@ int game_run(){
         al_flip_display();
     }
     else if(window == 4){   // win case
-        al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2-50 , ALLEGRO_ALIGN_CENTRE, "You Win!!");
+        al_draw_bitmap(load_bitmap_at_size("win.png",WIDTH,HEIGHT),0,0,0);
         al_flip_display();
         ALLEGRO_EVENT event_w;
         al_wait_for_event(event_queue, &event_w);
         if(event_w.type == ALLEGRO_EVENT_KEY_DOWN){
             switch(event_w.keyboard.keycode){
-                case ALLEGRO_KEY_TAB:
-                    printf("restart\n");
+                case ALLEGRO_KEY_BACKSPACE:
                     blood_down_temp = blood_down_x;
+                    blood_top_temp = blood_top_x + blood_between_distance;
                     window = 1;
                     judge_next_window = false;
+                    al_destroy_sample(song);
+                    song = al_load_sample("Killer Tracks - Paradise Awaits.wav");
+                    al_play_sample(song, 1.0, 0.0, 1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
                     return PLAY_AGAIN;
                     break;
                 case ALLEGRO_KEY_B:
@@ -658,60 +713,13 @@ int game_run(){
         }
         al_flip_display();
     }
-    else if(window == 6){
-        //setting
-        printf("enter setting\n");
-        al_draw_bitmap(load_bitmap_at_size("setting_menu.png",WIDTH,HEIGHT), 0, 0, 0);
-        al_flip_display();
-        ALLEGRO_EVENT event_r_e;
-        al_wait_for_event(event_queue, &event_r_e);
-        if(event_r_e.type == ALLEGRO_EVENT_KEY_DOWN){
-                printf("detect event\n");
-            switch(event_r_e.keyboard.keycode){
-                case ALLEGRO_KEY_1:
-                    printf("play new music\n");
-                    al_destroy_sample(song);
-                    song = al_load_sample ( "chao_chao.flac" );
-                    al_play_sample(song, 1.0, 0.0,1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
-                    break;
-                case ALLEGRO_KEY_2:
-                    al_destroy_sample(song);
-                    song = al_load_sample ( "Perrywinkle.wav" );
-                    al_play_sample(song, 1.0, 0.0,1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
-                    break;
-                case ALLEGRO_KEY_3:
-                    al_destroy_sample(song);
-                    song = al_load_sample ( "Laugh_and_Cry.wav" );
-                    al_play_sample(song, 1.0, 0.0,1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
-                    break;
-                case ALLEGRO_KEY_I:
-                    input();
-                    break;
-                case ALLEGRO_KEY_S:
-                    out_file = true;
-                    break;
-                case ALLEGRO_KEY_BACKSPACE:
-                    window = 1;
-                    al_draw_bitmap(load_bitmap_at_size("menu.png",WIDTH,HEIGHT),0,0,0);
-                    al_flip_display();
-                    break;
-                case ALLEGRO_KEY_ESCAPE:
-                    return GAME_TERMINATE;
-                    break;
-                default:
-                    al_clear_to_color(al_map_rgb(0,0,0));
-                    al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+180 , ALLEGRO_ALIGN_CENTRE, "fuck you !");
-                    al_flip_display();
-                    al_rest(1.0);
-                    break;
-            }
-        }
-    }
-    if(store){   // when we press B , we will go to store
-        if(!al_is_event_queue_empty(event_queue)){
-            printf("enter store\n");
+        else if(window == 5){   // when we press B , we will go to store
+        //if(!al_is_event_queue_empty(event_queue)){
+            //printf("enter store\n");
             al_draw_bitmap(load_bitmap_at_size("store_menu.png",WIDTH,HEIGHT),0,0,0);
-            al_draw_textf(font,al_map_rgb(0,0,255),WIDTH / 3, 0, 0,"score : %d", score);
+            //printf("how long\n");
+            al_draw_textf(font,al_map_rgb(240,240,240),WIDTH * 9 / 24, 0, 0,"score : %d", score);
+            al_flip_display();
             ALLEGRO_EVENT event_s;
             al_wait_for_event(event_queue, &event_s);
             if(event_s.type == ALLEGRO_EVENT_KEY_DOWN){
@@ -719,6 +727,7 @@ int game_run(){
                 switch(event_s.keyboard.keycode){
                     case ALLEGRO_KEY_1:
                         if(score - 10 >= 0){
+                            score -= 10;
                             printf("buy_1\n");
                             //enemy_injury = 0;
                             //injury = 0;
@@ -742,6 +751,7 @@ int game_run(){
                         break;
                     case ALLEGRO_KEY_2:
                         if(score - 50 >= 0){
+                                score -= 500;
                                 enemy_addtional_v = -5;
                                 enemy_MAX_COOLDOWN = 1;
                                 window = 1;
@@ -784,6 +794,7 @@ int game_run(){
                         break;
                     case ALLEGRO_KEY_4:
                         if(score - 10 >= 0){
+                            score -= 1000;
                             printf("buy_4\n");
                             character1.vy = - (character1.vx);
                             window = 1;
@@ -803,6 +814,11 @@ int game_run(){
                             al_rest(1.0);
                         }
                         break;
+                    case ALLEGRO_KEY_BACKSPACE:
+                        window = 1;
+                        al_draw_bitmap(load_bitmap_at_size("menu.png",WIDTH,HEIGHT),0,0,0);
+                        al_flip_display();
+                        break;
                     case ALLEGRO_KEY_E:
                         return GAME_TERMINATE;
                         break;
@@ -818,8 +834,79 @@ int game_run(){
                 }
                 al_flip_display();
             }
+        //}
+    }
+    else if(window == 6){
+        //setting
+        al_draw_bitmap(load_bitmap_at_size("setting_menu.png",WIDTH,HEIGHT), 0, 0, 0);
+        al_flip_display();
+        ALLEGRO_EVENT event_r_e;
+        al_wait_for_event(event_queue, &event_r_e);
+        if(event_r_e.type == ALLEGRO_EVENT_KEY_DOWN){
+                printf("detect event\n");
+            switch(event_r_e.keyboard.keycode){
+                case ALLEGRO_KEY_1:
+                    printf("play new music\n");
+                    al_destroy_sample(song);
+                    song = al_load_sample ( "chao_chao.flac" );
+                    al_play_sample(song, 1.0, 0.0,1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
+                    break;
+                case ALLEGRO_KEY_2:
+                    al_destroy_sample(song);
+                    song = al_load_sample ( "Perrywinkle.wav" );
+                    al_play_sample(song, 1.0, 0.0,1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
+                    break;
+                case ALLEGRO_KEY_3:
+                    al_destroy_sample(song);
+                    song = al_load_sample ( "Laugh_and_Cry.wav" );
+                    al_play_sample(song, 1.0, 0.0,1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
+                    break;
+                case ALLEGRO_KEY_4:
+                    WIDTH = disp_data.width;
+                    HEIGHT = disp_data.height;
+                    al_destroy_display(display);
+                    al_create_display(WIDTH,HEIGHT);
+                    judge_next_window = false;
+                    blood_between_distance = WIDTH - blood_width;
+                    //al_destroy_timer(timer);
+                    //al_destroy_timer(timer2);
+                    //al_destroy_bitmap(image);
+                    break;
+                case ALLEGRO_KEY_I:
+                    input_file = true;
+                    out_file = true;
+                    input();
+                    al_draw_textf(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+195 , ALLEGRO_ALIGN_CENTRE, "input ok!");
+                    al_flip_display();
+                    al_rest(1.0);
+                    break;
+                case ALLEGRO_KEY_S:
+                    out_file = true;
+                    al_draw_textf(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+195 , ALLEGRO_ALIGN_CENTRE, "save result !");
+                    al_flip_display();
+                    al_rest(1.0);
+                    break;
+                case ALLEGRO_KEY_BACKSPACE:
+                    window = 1;
+                    al_destroy_sample(song);
+                    song = al_load_sample("Killer Tracks - Paradise Awaits.wav");
+                    al_play_sample(song, 1.0, 0.0, 1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
+                    al_draw_bitmap(load_bitmap_at_size("menu.png",WIDTH,HEIGHT),0,0,0);
+                    al_flip_display();
+                    break;
+                case ALLEGRO_KEY_ESCAPE:
+                    return GAME_TERMINATE;
+                    break;
+                default:
+                    al_clear_to_color(al_map_rgb(0,0,0));
+                    al_draw_text(font, al_map_rgb(255,255,255), WIDTH/2, HEIGHT/2+180 , ALLEGRO_ALIGN_CENTRE, "fuck you !");
+                    al_flip_display();
+                    al_rest(1.0);
+                    break;
+            }
         }
     }
+
     return error;
 }
 
@@ -831,7 +918,6 @@ void game_destroy() {
     al_destroy_timer(timer2);
     al_destroy_bitmap(image);
     al_destroy_sample(song);
-    al_destroy_sample(song_AGAIN);
 }
 
 ALLEGRO_BITMAP *load_bitmap_at_size(const char *filename, int w, int h)
@@ -878,7 +964,7 @@ void death_animation(Character obj){  //人物死亡特效
         al_draw_bitmap(obj.image_path, obj.x, i ,0);
         al_flip_display();
         al_rest(0.03);     // 0.02~0.1 is the best scene
-        obj.image_path = load_bitmap_at_size("pegasus.png", obj.w - j, obj.h - j);
+        obj.image_path = load_bitmap_at_size("deadhorse.png", obj.w - j, obj.h - j);
     }
     al_rest(0.5);
     for(i, j; i < HEIGHT ; i += obj.h / 4, j += 3){
@@ -886,20 +972,21 @@ void death_animation(Character obj){  //人物死亡特效
         al_draw_bitmap(obj.image_path , obj.x, i ,0);
         al_flip_display();
         al_rest(0.03);
-        obj.image_path = load_bitmap_at_size("pegasus.png", obj.w - j, obj.h - j);
+        obj.image_path = load_bitmap_at_size("deadhorse.png", obj.w - j, obj.h - j);
     }
-    obj.image_path = load_bitmap_at_size("pegasus.png", obj.w, obj.h);
+    obj.image_path = load_bitmap_at_size("deadhorse.png", obj.w, obj.h);
     is_death_anime = false;
 }
 
 void play_music(){
-    song_AGAIN = al_load_sample( "Sunshine.wav" );
+    al_destroy_sample(song);
+    song = al_load_sample( "chao_chao.flac" );
     if (!song){
         printf( "Audio clip sample not loaded!\n" );
         show_err_msg(-6);
     }
     // Loop the song until the display closes
-    al_play_sample(song_AGAIN, 0.5, 0.0,1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
+    al_play_sample(song, 0.5, 0.0,1.0,ALLEGRO_PLAYMODE_LOOP,NULL);
 }
 
 void input(){
@@ -921,7 +1008,7 @@ void item_initialize(){
     for(i = 0; i < 2; ++i){
         special_item_speed[i].w = 40;
         special_item_speed[i].h = 40;
-        special_item_speed[i].image_path = load_bitmap_at_size("bullet.png",special_item_speed[i].w,special_item_speed[i].h);
+        special_item_speed[i].image_path = load_bitmap_at_size("power.png",special_item_speed[i].w,special_item_speed[i].h);
         special_item_speed[i].vx = -20 ;
         special_item_speed[i].vy = (rand() % 41) - 20;
         special_item_speed[i].hidden = true;
@@ -941,7 +1028,7 @@ void item_initialize(){
     for(i = 0; i < 10; ++i){
         special_item_score[i].w = 40;
         special_item_score[i].h = 40;
-        special_item_score[i].image_path = load_bitmap_at_size("bullet.png",special_item_score[i].w,special_item_score[i].h);
+        special_item_score[i].image_path = load_bitmap_at_size("money.png",special_item_score[i].w,special_item_score[i].h);
         special_item_score[i].vx = -20 ;
         special_item_score[i].vy = (rand() % 41) - 20;
         special_item_score[i].hidden = true;
@@ -951,7 +1038,7 @@ void item_initialize(){
     for(i = 0; i < 3; ++i){
         special_item_blood[i].w = 40;
         special_item_blood[i].h = 40;
-        special_item_blood[i].image_path = load_bitmap_at_size("bullet.png",special_item_blood[i].w,special_item_blood[i].h);
+        special_item_blood[i].image_path = load_bitmap_at_size("heal.png",special_item_blood[i].w,special_item_blood[i].h);
         special_item_blood[i].vx = -20 ;
         special_item_blood[i].vy = (rand() % 41) - 20;
         special_item_blood[i].hidden = true;
@@ -1011,7 +1098,8 @@ void eat_item(){
     for(i = 0; i < 2; ++i){
         if((special_item_speed[i].x > character1.x) && (special_item_speed[i].x < character1.x + character1.w)
                &&(special_item_speed[i].y > character1.y) && (special_item_speed[i].y < character1.y + character1.h)){
-                bullet_addtional_v = 5;
+                if(special_item_speed[i].hidden == false)
+                    bullet_addtional_v = 5;
                 special_item_speed[i].hidden = true;
                 break;
         }
@@ -1019,7 +1107,8 @@ void eat_item(){
     for(i = 0; i < 2; ++i){
         if((special_item_injury[i].x > character1.x) && (special_item_injury[i].x < character1.x + character1.w)
                &&(special_item_injury[i].y > character1.y) && (special_item_injury[i].y < character1.y + character1.h)){
-                bullet_addtional_injury = 4;
+                if(special_item_injury[i].hidden == false)
+                    bullet_addtional_injury = 4;
                 special_item_injury[i].hidden = true;
                 break;
         }
@@ -1027,7 +1116,8 @@ void eat_item(){
     for(i = 0; i < 10; ++i){
         if((special_item_score[i].x > character1.x) && (special_item_score[i].x < character1.x + character1.w)
                &&(special_item_score[i].y > character1.y) && (special_item_score[i].y < character1.y + character1.h)){
-                score += 3;
+                if(special_item_score[i].hidden == false)
+                    score += 5;
                 special_item_score[i].hidden = true;
                 break;
         }
@@ -1035,8 +1125,10 @@ void eat_item(){
     for(i = 0; i < 3; ++i){
         if((special_item_blood[i].x > character1.x) && (special_item_blood[i].x < character1.x + character1.w)
                &&(special_item_blood[i].y > character1.y) && (special_item_blood[i].y < character1.y + character1.h)){
-                if(blood_down_temp < blood_down_x)
-                blood_down_temp += 10;
+                if(special_item_blood[i].hidden == false){
+                    if(blood_down_temp < blood_down_x)
+                    blood_down_temp += 5;
+                }
                 special_item_blood[i].hidden = true;
                 break;
         }
@@ -1066,4 +1158,59 @@ void draw_item(){
     }
 }
 
+void start_animation(){
+    int i;
+    al_draw_bitmap(load_bitmap_at_size("menu.jpg",WIDTH,HEIGHT),0,0,0);
+    al_flip_display();
+    font = al_load_ttf_font("pirulen.ttf",20,0);
 
+    for( i = 0; i < 255; ++i){
+        al_draw_text(font, al_map_rgb(i,i,i), WIDTH/2, HEIGHT/2 -120 , ALLEGRO_ALIGN_CENTRE, "Once upon the time ,the Old Gods encountered");
+        al_flip_display();
+        al_rest(0.02);
+    }
+    //al_rest(0.2);
+
+    for( i = 0; i < 255; ++i){
+        al_draw_text(font, al_map_rgb(i,i,i), WIDTH/2, HEIGHT/2 - 80 , ALLEGRO_ALIGN_CENTRE, " the attack of Demons. To stop them,");
+        al_flip_display();
+        al_rest(0.02);
+    }
+    //al_rest(0.2);
+
+    for( i = 0; i < 255; ++i){// printf("fuck you\n");
+        al_draw_text(font, al_map_rgb(i,i,i), WIDTH/2, HEIGHT/2-40 , ALLEGRO_ALIGN_CENTRE, "the Old Gods and the heroes ");
+        al_flip_display();
+        al_rest(0.02);
+    }
+    //al_rest(0.2);
+
+        for( i = 0; i < 255; ++i){// printf("fuck you\n");
+        al_draw_text(font, al_map_rgb(i,i,i), WIDTH/2, HEIGHT/2   , ALLEGRO_ALIGN_CENTRE, " tried their best to defeat them.");
+        al_flip_display();
+        al_rest(0.02);
+    }
+    //al_rest(0.2);
+    for( i = 0; i < 255; ++i){
+        al_draw_text(font, al_map_rgb(i,i,i), WIDTH/2, HEIGHT/2 +40 , ALLEGRO_ALIGN_CENTRE, "Before long, they found out that ");
+        al_flip_display();
+        al_rest(0.02);
+    }
+    //al_rest(0.2);
+
+        for( i = 0; i < 255; ++i){
+        al_draw_text(font, al_map_rgb(i,i,i), WIDTH/2, HEIGHT/2 +80 , ALLEGRO_ALIGN_CENTRE, " the Demons had left a passage for another opportunity.");
+        al_flip_display();
+        al_rest(0.02);
+    }
+    al_rest(0.2);
+
+    for( i = 0; i < 255; ++i){
+        al_draw_text(font, al_map_rgb(i,i,i), WIDTH/2, HEIGHT/2 +120 , ALLEGRO_ALIGN_CENTRE, "Thus , the Old Gods sent you,Pegsus, to the world of Demons and eliminate them to protect the earth.");
+        al_flip_display();
+        al_rest(0.02);
+    }
+    //al_rest(0.2);
+
+    font = al_load_ttf_font("pirulen.ttf",20,0);
+}
